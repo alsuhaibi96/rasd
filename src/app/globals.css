@@ -1,26 +1,101 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-bg: #071014;
+  --color-surface: #0c171b;
+  --color-surface-2: #101f24;
+  --color-surface-3: #15282e;
+  --color-line: #1a2c31;
+  --color-line-2: #24393f;
+  --color-fg: #e6f0ee;
+  --color-muted: #8ea4a0;
+  --color-dim: #5d7571;
+  --color-brand: #34d399;
+  --color-brand-strong: #10b981;
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-danger: #f43f5e;
+  --color-unk: #7b8d91;
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --animate-flash: flash 1.4s ease-out;
+  --animate-pulse-ring: pulse-ring 1.8s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@keyframes flash {
+  0% { background-color: rgb(52 211 153 / 0.14); }
+  100% { background-color: transparent; }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+@keyframes travel {
+  0% { inset-inline-start: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { inset-inline-start: 100%; opacity: 0; }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html { color-scheme: dark; }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
 }
+::selection { background: rgb(52 211 153 / 0.3); }
+* { scrollbar-width: thin; scrollbar-color: var(--color-line-2) transparent; }
+
+.num { font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+
+/* ---------- Map ---------- */
+.rasd-map .maplibregl-canvas { outline: none; }
+.rasd-marker {
+  position: relative; width: 34px; height: 34px; display: grid; place-items: center;
+  cursor: pointer; background: none; border: 0; padding: 0;
+  --c: var(--color-unk);
+}
+.rasd-marker[data-status="normal"] { --c: var(--color-ok); }
+.rasd-marker[data-status="warning"] { --c: var(--color-warn); }
+.rasd-marker[data-status="danger"] { --c: var(--color-danger); }
+.rasd-marker .halo {
+  position: absolute; inset: 5px; border-radius: 9999px;
+  background: color-mix(in oklab, var(--c) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--c) 45%, transparent);
+  transition: transform .2s;
+}
+.rasd-marker .core {
+  position: relative; width: 11px; height: 11px; border-radius: 9999px; background: var(--c);
+  box-shadow: 0 0 0 2px #071014, 0 0 12px var(--c);
+}
+.rasd-marker .ring {
+  position: absolute; inset: 9px; border-radius: 9999px; border: 2px solid var(--c); opacity: 0;
+}
+.rasd-marker[data-status="warning"] .ring,
+.rasd-marker[data-status="danger"] .ring { animation: pulse-ring 1.8s cubic-bezier(.2,.6,.4,1) infinite; }
+.rasd-marker[data-status="danger"] .ring.r2 { animation-delay: .9s; }
+.rasd-marker:hover .halo, .rasd-marker[data-selected="true"] .halo { transform: scale(1.35); }
+.rasd-marker[data-selected="true"] .halo { border-color: var(--c); border-width: 2px; }
+.rasd-marker .lbl {
+  position: absolute; top: 31px; white-space: nowrap; font-size: 11px; font-weight: 600;
+  color: #cfe0dc; text-shadow: 0 1px 2px #000, 0 0 6px #071014; pointer-events: none;
+}
+.rasd-marker .lbl.up { top: auto; bottom: 31px; }
+.rasd-marker .lbl.east { top: auto; right: auto; left: 32px; }
+.rasd-region-label {
+  font-size: 11px; color: #6f8a86; font-weight: 500; letter-spacing: .01em; pointer-events: none;
+  text-shadow: 0 0 4px #0c171b; white-space: nowrap;
+}
+.rasd-region-label.minor { font-size: 10px; }
+.rasd-map[data-zoom="low"] .rasd-region-label.minor { display: none; }
+.rasd-geo-label {
+  font-size: 12px; color: #4f6763; font-weight: 500; pointer-events: none; white-space: nowrap;
+}
+.rasd-geo-label.sea { font-style: italic; color: #3f6a73; letter-spacing: .08em; }
+.rasd-geo-label.country { font-size: 15px; color: #5f7d78; letter-spacing: .06em; font-weight: 600; }
+.maplibregl-popup.rasd-popup .maplibregl-popup-content {
+  background: #0f1e23f2; border: 1px solid var(--color-line-2); border-radius: 12px; padding: 10px 12px;
+  color: var(--color-fg); box-shadow: 0 12px 32px #0009; backdrop-filter: blur(6px); direction: rtl;
+  font-family: var(--font-sans);
+}
+.maplibregl-popup.rasd-popup .maplibregl-popup-tip { border-top-color: #0f1e23f2; border-bottom-color: #0f1e23f2; }

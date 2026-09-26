@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# رَصد · RASD — نظام الاستجابة الفورية للكوارث الطبيعية
 
-## Getting Started
+Real-time monitoring prototype: **sensor → ingest → classify (طبيعي / تحذير / خطر) → live dashboard → alert**.
 
-First, run the development server:
+- **Next.js 15** (App Router, standalone) + **PostgreSQL** — one process, no separate backend.
+- **Live updates** with no polling: every reading triggers Postgres `NOTIFY` → one `LISTEN` connection per server → **Server-Sent Events** (`/api/stream`) → every open dashboard.
+- **Saudi map**: MapLibre GL with self-hosted GeoJSON (13 administrative regions from geoBoundaries, neighbours from Natural Earth). No tile provider or API key. Regions are tinted by their worst live status, and stations are shown as pulsing markers.
+- Editable per-sensor-type thresholds, alert log with acknowledgement, and a response path (رصد ← تحليل ← تنبيه ← تأكيد الاطلاع).
+- A built-in **simulator** keeps the demo alive (random walk with occasional hazard surges). A sensor switches to live automatically when a real device reports for it.
+
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+cp .env.example .env.local        # set DATABASE_URL etc.
+pnpm db:setup                     # schema + 12 demo stations + 1h of history (add -- --reset to reseed)
+pnpm dev                          # http://localhost:3000  (login with ADMIN_USER / ADMIN_PASSWORD)
+pnpm test                         # severity / escalation unit tests
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Sending readings (ESP32 or anything else)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+curl -X POST https://rasd.alsuhaibi96.com/api/ingest \
+  -H "x-device-key: $INGEST_API_KEY" -H "content-type: application/json" \
+  -d '{"sensor":"WTR-01","value":85}'
+# also accepted: [{"sensor":"WTR-01","value":85}, ...]  or  {"readings":{"WTR-01":85,"GAS-01":340}}
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The response contains each reading's computed status and any alert it opened. Firmware for an ESP32 with an ultrasonic water-level sensor and an MQ-2 smoke/gas sensor is in [`firmware/esp32_rasd`](firmware/esp32_rasd/esp32_rasd.ino).
 
-## Learn More
+| Sensor code | Type | Station |
+|---|---|---|
+| WTR-01…05 | water level (cm) | حائل، الرياض، مكة، جازان، نجران |
+| GAS-01/02 | smoke / gas (raw 0–4095) | أبها، الباحة |
+| TMP-01/02, HUM-01 | temperature °C / humidity % | جدة، الدمام |
+| PRS-01/02 | pressure hPa (danger when **low**) | الدمام، سكاكا |
+| VIB-01/02 | vibration g | تبوك، حرة لونير |
 
-To learn more about Next.js, take a look at the following resources:
+## Alert rules
+- A level starts when the reading **reaches** its limit (≥, or ≤ for pressure).
+- An alert opens only on **escalation** (e.g. طبيعي→تحذير, تحذير→خطر). It is not repeated while that level stays open and unacknowledged for 10 minutes.
+- Saving thresholds re-classifies every sensor's latest value immediately. Any resulting escalations raise alerts.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy
+`deploy/deploy.sh` builds locally, rsyncs the standalone bundle to `/var/www/rasd`, runs the idempotent DB setup, and restarts `rasd.service`. The server needs `/var/www/rasd/.env` (see `.env.example`), the systemd unit `deploy/rasd.service`, and the nginx site `deploy/nginx.conf` (SSE-safe proxying).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Map data
+Rebuild with `pnpm geo:build <geoBoundaries-SAU-ADM1.geojson> <ne_50m_admin_0_countries.geojson>` (mapshaper simplification). Sources: geoBoundaries (CC BY 4.0) and Natural Earth (public domain).

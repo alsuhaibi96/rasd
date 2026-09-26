@@ -1,0 +1,18 @@
+[Unit]
+Description=RASD real-time disaster response dashboard (Next.js)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/rasd
+EnvironmentFile=/var/www/rasd/.env
+Environment=NODE_ENV=production PORT=3107 HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+MemoryMax=450M
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
