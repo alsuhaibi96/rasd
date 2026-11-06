@@ -10,11 +10,28 @@ const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await db.connect();
 
 if (process.argv.includes("--reset")) {
-  await db.query("DROP TABLE IF EXISTS alerts, readings, sensors, thresholds, stations CASCADE");
+  await db.query("DROP TABLE IF EXISTS test_records, events, plan_versions, recommendations, area_assessments, assessments, alert_transitions, scenario_runs, alerts, readings, sensors, thresholds, stations CASCADE");
   console.log("dropped existing tables");
 }
 await db.query(readFileSync(join(root, "db/schema.sql"), "utf8"));
 console.log("schema applied");
+
+// Idempotent upgrades for databases seeded before RASD-DEV-001.
+async function ensureRainfall() {
+  await db.query(
+    `INSERT INTO thresholds (sensor_type, warning, danger, direction, min_value, max_value)
+     VALUES ('rainfall', NULL, NULL, 'above', 0, 50) ON CONFLICT (sensor_type) DO NOTHING`,
+  );
+  const st = await db.query("SELECT id FROM stations WHERE code = 'ST-01'");
+  if (st.rows[0])
+    await db.query(
+      `INSERT INTO sensors (code, station_id, type, unit, last_value, last_status, last_source, last_seen_at)
+       VALUES ('RAIN-01', $1, 'rainfall', 'mm/min', 0, 'unknown', 'simulator', now()) ON CONFLICT (code) DO NOTHING`,
+      [st.rows[0].id],
+    );
+  // Runs that were active when the server stopped can never resume.
+  await db.query("UPDATE scenario_runs SET status = 'interrupted', ended_at = now() WHERE status IN ('running', 'paused')");
+}
 
 const THRESHOLDS = [
   // type, warning, danger, direction, min, max
@@ -46,7 +63,8 @@ const BASE = { water_level: [24, 1.2], smoke_gas: [170, 12], temperature: [36, 0
 
 const { rows: existing } = await db.query("SELECT count(*)::int AS n FROM stations");
 if (existing[0].n > 0) {
-  console.log("already seeded — skipping (use --reset to reseed)");
+  await ensureRainfall();
+  console.log("already seeded — upgrades applied (use --reset to reseed)");
   await db.end();
   process.exit(0);
 }
@@ -95,5 +113,6 @@ for (const [code, name, city, region, lat, lng, sensors] of STATIONS) {
   }
 }
 await db.query("COMMIT");
+await ensureRainfall();
 console.log(`seeded ${STATIONS.length} stations`);
 await db.end();

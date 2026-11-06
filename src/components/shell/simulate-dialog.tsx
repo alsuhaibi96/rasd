@@ -4,7 +4,8 @@ import { Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { indexBy } from "@/lib/derive";
-import { SENSOR_META, STATUS_LABEL } from "@/lib/sensor-meta";
+import { useLang, useTr } from "@/lib/i18n";
+import { SENSOR_META, SENSOR_META_EN, STATUS_LABEL, STATUS_LABEL_EN } from "@/lib/sensor-meta";
 import { useRasd } from "@/lib/store";
 import { Button, StatusBadge } from "../ui";
 
@@ -18,6 +19,10 @@ export function SimulateDialog({ open, onClose }: { open: boolean; onClose: () =
   const [level, setLevel] = useState<(typeof LEVELS)[number]>("danger");
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const tr = useTr();
+  const lang = useLang();
+  const statusLabel = lang === "en" ? STATUS_LABEL_EN : STATUS_LABEL;
+  const typeLabel = (t: keyof typeof SENSOR_META) => (lang === "en" ? SENSOR_META_EN[t] : SENSOR_META[t]);
 
   useEffect(() => {
     if (open && !sensor && sensors[0]) setSensor(sensors[0].code);
@@ -43,10 +48,12 @@ export function SimulateDialog({ open, onClose }: { open: boolean; onClose: () =
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast.success(`أُرسلت القراءة ${data.value} إلى ${data.sensor}`, { description: `الحالة: ${STATUS_LABEL[data.status as "normal"]}` });
+      toast.success(tr(`أُرسلت القراءة ${data.value} إلى ${data.sensor}`, `Reading ${data.value} sent to ${data.sensor}`), {
+        description: `${tr("الحالة", "Status")}: ${statusLabel[data.status as "normal"]}`,
+      });
       onClose();
     } catch (e) {
-      toast.error((e as Error).message || "تعذر إرسال القراءة");
+      toast.error((e as Error).message || tr("تعذر إرسال القراءة", "Could not send the reading"));
     } finally {
       setBusy(false);
     }
@@ -56,13 +63,15 @@ export function SimulateDialog({ open, onClose }: { open: boolean; onClose: () =
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div role="dialog" aria-modal className="relative w-full max-w-lg rounded-2xl border border-line-2 bg-surface p-6 shadow-2xl">
-        <button onClick={onClose} className="absolute top-4 end-4 rounded-lg p-1.5 text-muted hover:bg-surface-3" aria-label="إغلاق">
+        <button onClick={onClose} className="absolute top-4 end-4 rounded-lg p-1.5 text-muted hover:bg-surface-3" aria-label={tr("إغلاق", "Close")}>
           <X className="size-5" />
         </button>
-        <h3 className="text-lg font-bold">محاكاة قراءة جديدة</h3>
-        <p className="mt-1 text-sm text-muted">تمر القراءة بنفس مسار الأجهزة: حفظ ← تحليل ← تحديث اللوحة ← تنبيه.</p>
+        <h3 className="text-lg font-bold">{tr("محاكاة قراءة جديدة", "Simulate a new reading")}</h3>
+        <p className="mt-1 text-sm text-muted">
+          {tr("تمر القراءة بنفس مسار الأجهزة: حفظ ← تحليل ← تحديث اللوحة ← تنبيه.", "The reading follows the same path as device data: save → analyse → update dashboard → alert.")}
+        </p>
 
-        <label className="mt-5 block text-sm text-muted">الحساس</label>
+        <label className="mt-5 block text-sm text-muted">{tr("الحساس", "Sensor")}</label>
         <select
           value={sensor}
           onChange={(e) => setSensor(e.target.value)}
@@ -70,17 +79,17 @@ export function SimulateDialog({ open, onClose }: { open: boolean; onClose: () =
         >
           {sensors.map((s) => (
             <option key={s.id} value={s.code}>
-              {s.code} · {SENSOR_META[s.type].label} — {stationById.get(s.station_id)?.name_ar}
+              {s.code} · {typeLabel(s.type).label} — {stationById.get(s.station_id)?.name_ar}
             </option>
           ))}
         </select>
         {selected && (
           <div className="mt-2 flex items-center gap-2 text-xs text-muted">
-            الحالة الحالية: <StatusBadge status={selected.last_status} />
+            {tr("الحالة الحالية:", "Current status:")} <StatusBadge status={selected.last_status} />
           </div>
         )}
 
-        <label className="mt-5 block text-sm text-muted">المستوى المطلوب</label>
+        <label className="mt-5 block text-sm text-muted">{tr("المستوى المطلوب", "Target level")}</label>
         <div className="mt-2 grid grid-cols-3 gap-2">
           {LEVELS.map((l) => (
             <button
@@ -100,29 +109,28 @@ export function SimulateDialog({ open, onClose }: { open: boolean; onClose: () =
                   : "border-line-2 text-muted hover:bg-surface-2",
               )}
             >
-              {STATUS_LABEL[l]}
+              {statusLabel[l]}
             </button>
           ))}
         </div>
 
         <label className="mt-5 block text-sm text-muted">
-          أو قيمة محددة {selected && <span className="text-dim">({SENSOR_META[selected.type].unitLabel})</span>}
+          {tr("أو قيمة محددة", "Or a specific value")} {selected && <span className="text-dim">({typeLabel(selected.type).unitLabel})</span>}
         </label>
         <input
           type="number"
           inputMode="decimal"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="اتركها فارغة لتوليد قيمة حسب المستوى"
+          placeholder={tr("اتركها فارغة لتوليد قيمة حسب المستوى", "Leave empty to generate a value for the level")}
           className="num mt-2 w-full rounded-xl border border-line-2 bg-surface-2 px-3 py-2.5 text-start text-sm outline-none placeholder:text-dim focus:border-brand"
-          dir="rtl"
         />
 
         <div className="mt-6 flex gap-3">
           <Button variant="primary" className="flex-1" onClick={submit} disabled={busy || !sensor}>
-            <Send className="size-4 -scale-x-100" /> {busy ? "جارٍ الإرسال…" : "إرسال القراءة"}
+            <Send className="size-4 rtl:-scale-x-100" /> {busy ? tr("جارٍ الإرسال…", "Sending…") : tr("إرسال القراءة", "Send reading")}
           </Button>
-          <Button onClick={onClose}>إلغاء</Button>
+          <Button onClick={onClose}>{tr("إلغاء", "Cancel")}</Button>
         </div>
       </div>
     </div>

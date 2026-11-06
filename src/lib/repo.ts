@@ -5,19 +5,21 @@ import { classify, isEscalation, validateLimits } from "./severity";
 import type { Alert, Reading, Sensor, Snapshot, Threshold } from "./types";
 
 export const SENSOR_COLS =
-  "id, code, station_id, type, unit, last_value, last_status, last_source, last_seen_at";
+  "id, code, station_id, type, unit, last_value, last_status, last_source, last_seen_at, last_data_source, last_scenario_id";
 
 export function simulatorEnabled() {
   return process.env.SIMULATOR !== "off";
 }
 
 export async function getSnapshot(): Promise<Snapshot> {
-  const [stations, sensors, thresholds, alerts] = await Promise.all([
+  const [stations, sensors, thresholds, alerts, total] = await Promise.all([
     pool.query("SELECT * FROM stations ORDER BY id"),
     pool.query(`SELECT ${SENSOR_COLS} FROM sensors ORDER BY id`),
     pool.query("SELECT * FROM thresholds ORDER BY sensor_type"),
     pool.query("SELECT * FROM alerts ORDER BY created_at DESC LIMIT 200"),
+    pool.query("SELECT count(*)::int AS n FROM alerts"),
   ]);
+  const { currentRunView } = await import("./scenario/runner");
   return {
     stations: stations.rows,
     sensors: sensors.rows,
@@ -25,6 +27,8 @@ export async function getSnapshot(): Promise<Snapshot> {
     alerts: alerts.rows,
     simulator: simulatorEnabled(),
     serverTime: new Date().toISOString(),
+    run: currentRunView(),
+    alertTotal: total.rows[0].n,
   };
 }
 
@@ -51,9 +55,9 @@ export async function maybeOpenAlert(
   );
   if (open.rowCount) return null;
   const { rows } = await db.query(
-    `INSERT INTO alerts (sensor_id, reading_id, level, value, threshold, source)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [sensor.id, reading.id, level, reading.value, limit, reading.source],
+    `INSERT INTO alerts (sensor_id, reading_id, level, value, threshold, source, data_source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [sensor.id, reading.id, level, reading.value, limit, reading.source, reading.source === "device" ? "external" : "simulated"],
   );
   return rows[0];
 }
@@ -66,6 +70,8 @@ export async function acknowledgeAlert(id: number, by: string): Promise<Alert | 
   );
   if (!rows[0]) return null;
   await publish({ type: "ack", alert: rows[0] });
+  const { onAlertAcknowledged } = await import("./scenario/runner");
+  await onAlertAcknowledged(rows[0], by).catch((e) => console.error("[scenario] ack sync", e));
   return rows[0];
 }
 

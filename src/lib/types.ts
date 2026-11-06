@@ -1,7 +1,9 @@
 export type Status = "normal" | "warning" | "danger" | "unknown";
 export type AlertLevel = "warning" | "danger";
 export type Source = "device" | "simulator";
-export type SensorType = "water_level" | "smoke_gas" | "temperature" | "humidity" | "pressure" | "vibration";
+export type SensorType = "water_level" | "smoke_gas" | "temperature" | "humidity" | "pressure" | "vibration" | "rainfall";
+/** Spec §4.3 source classification. */
+export type DataSource = "real" | "simulated" | "test" | "external";
 
 export interface Station {
   id: number;
@@ -23,6 +25,8 @@ export interface Sensor {
   last_status: Status;
   last_source: Source;
   last_seen_at: string | null;
+  last_data_source: DataSource;
+  last_scenario_id: string | null;
 }
 
 export interface Threshold {
@@ -41,6 +45,11 @@ export interface Reading {
   value: number;
   status: Status;
   source: Source;
+  data_source: DataSource;
+  scenario_id: string | null;
+  run_id: number | null;
+  tick: number | null;
+  quality_status: string;
   created_at: string;
 }
 
@@ -55,6 +64,10 @@ export interface Alert {
   created_at: string;
   acknowledged_at: string | null;
   acknowledged_by: string | null;
+  data_source: DataSource;
+  scenario_id: string | null;
+  run_id: number | null;
+  tick: number | null;
 }
 
 export interface Snapshot {
@@ -64,10 +77,14 @@ export interface Snapshot {
   alerts: Alert[];
   simulator: boolean;
   serverTime: string;
+  run: import("./scenario-types").RunView | null;
+  alertTotal: number;
 }
 
 export type RealtimeEvent =
   | { type: "reading"; sensor: Sensor; reading: Reading }
   | { type: "alert"; alert: Alert }
   | { type: "ack"; alert: Alert }
-  | { type: "thresholds"; thresholds: Threshold[]; sensors: Sensor[] };
+  | { type: "thresholds"; thresholds: Threshold[]; sensors: Sensor[] }
+  | { type: "run"; run: import("./scenario-types").RunView | null }
+  | { type: "events"; events: import("./scenario-types").LoggedEvent[] };

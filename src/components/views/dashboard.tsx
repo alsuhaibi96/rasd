@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { ReadingsTable } from "@/components/dashboard/readings-table";
 import { PriorityAlert } from "@/components/dashboard/priority-alert";
-import { ResponseCycle } from "@/components/dashboard/response-cycle";
+import { OperationalChain } from "@/components/dashboard/operational-chain";
+import { RiskPanel } from "@/components/dashboard/risk-panel";
+import { RiskStrip } from "@/components/dashboard/risk-strip";
 import { TrendChart } from "@/components/dashboard/trend-chart";
 import { SaudiMap } from "@/components/map";
 import { KpiRow } from "@/components/shell/kpi-row";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, SectionTitle, SourceTag, StatusBadge, Value } from "@/components/ui";
 import { indexBy, priorityAlert } from "@/lib/derive";
-import { SENSOR_META, formatValue } from "@/lib/sensor-meta";
+import { useTr } from "@/lib/i18n";
+import { SENSOR_META, SENSOR_META_EN, formatValue } from "@/lib/sensor-meta";
 import { useRasd } from "@/lib/store";
 
 export function DashboardView() {
@@ -20,6 +23,8 @@ export function DashboardView() {
   const alerts = useRasd((s) => s.alerts);
   const selectedId = useRasd((s) => s.selectedSensorId);
   const select = useRasd((s) => s.select);
+  const run = useRasd((s) => s.run);
+  const tr = useTr();
 
   // Default chart: the sensor behind the priority alert, else the first water-level sensor.
   useEffect(() => {
@@ -28,13 +33,22 @@ export function DashboardView() {
     select(a?.sensor_id ?? sensors.find((s) => s.type === "water_level")?.id ?? sensors[0].id);
   }, [selectedId, sensors, alerts, select]);
 
+  // During a scenario the chart follows the scenario's water-level sensor.
+  const runId = run?.run_id;
+  useEffect(() => {
+    if (!runId) return;
+    const w = sensors.find((s) => s.code === "WTR-01");
+    if (w) select(w.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId]);
+
   const sensorById = useMemo(() => indexBy(sensors), [sensors]);
   const sensor = selectedId != null ? sensorById.get(selectedId) : undefined;
   const station = sensor && stations.find((s) => s.id === sensor.station_id);
 
   return (
     <>
-      <PageHeader title="نظرة عامة على الرصد" sub="الصورة الكاملة لنقاط الرصد والتنبيهات، في مكان واحد." />
+      <PageHeader title={tr("نظرة عامة على الرصد", "Monitoring overview")} sub={tr("نقاط الرصد وحالة التنبيه (L0) وتقييم الخطر (L1) وسلسلة التشغيل — في مكان واحد.", "Monitoring points, alert status (L0), risk assessment (L1) and the operational chain — in one place.")} />
       <KpiRow />
 
       <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-12">
@@ -42,11 +56,11 @@ export function DashboardView() {
           <div className="p-5">
             <SectionTitle
               icon={MapIcon}
-              title="خريطة نقاط الرصد"
-              sub={`${stations.length} نقطة رصد · ${new Set(stations.map((s) => s.region_code)).size} مناطق · المملكة العربية السعودية`}
+              title={tr("خريطة نقاط الرصد", "Monitoring points map")}
+              sub={tr(`${stations.length} نقطة رصد · ${new Set(stations.map((s) => s.region_code)).size} مناطق · المملكة العربية السعودية`, `${stations.length} monitoring points · ${new Set(stations.map((s) => s.region_code)).size} regions · Saudi Arabia`)}
               action={
                 <Link href="/stations" className="flex items-center gap-1 text-sm text-brand hover:underline">
-                  عرض القائمة <ArrowLeft className="size-4" />
+                  {tr("عرض القائمة", "View list")} <ArrowLeft className="size-4 ltr:rotate-180" />
                 </Link>
               }
             />
@@ -74,10 +88,10 @@ export function DashboardView() {
             <>
               <SectionTitle
                 icon={LineChart}
-                title={`اتجاه ${SENSOR_META[sensor.type].label}`}
+                title={tr(`اتجاه ${SENSOR_META[sensor.type].label}`, `${SENSOR_META_EN[sensor.type].label} trend`)}
                 sub={
                   <span className="flex items-center gap-1.5">
-                    <MapPin className="size-3" /> {station.name_ar}، {station.city_ar} <SourceTag source={sensor.last_source} />
+                    <MapPin className="size-3" /> {tr(`${station.name_ar}، ${station.city_ar}`, station.code)} <SourceTag source={sensor.last_data_source ?? sensor.last_source} />
                   </span>
                 }
                 action={
@@ -87,19 +101,23 @@ export function DashboardView() {
                 }
               />
               <div className="my-4 flex items-center justify-between">
-                <Value value={formatValue(sensor.type, sensor.last_value)} unit={SENSOR_META[sensor.type].unitLabel} className="text-4xl" />
+                <Value value={formatValue(sensor.type, sensor.last_value)} unit={tr(SENSOR_META[sensor.type].unitLabel, SENSOR_META_EN[sensor.type].unitLabel)} className="text-4xl" />
                 <StatusBadge status={sensor.last_status} />
               </div>
               <TrendChart sensor={sensor} height={230} />
-              <p className="mt-3 text-center text-[11px] text-dim">اختر حساسًا من الجدول أو الخريطة لعرض اتجاهه</p>
+              {run && sensor.code === "WTR-01" && <RiskStrip compact />}
+              <p className="mt-3 text-center text-[11px] text-dim">{tr("اختر حساسًا من الجدول أو الخريطة لعرض اتجاهه", "Pick a sensor in the table or on the map to see its trend")}</p>
             </>
           ) : (
             <div className="h-72 animate-pulse rounded-xl bg-surface-2" />
           )}
         </Card>
 
-        <div className="xl:col-span-12">
-          <ResponseCycle />
+        <div className="xl:col-span-4">
+          <RiskPanel />
+        </div>
+        <div className="xl:col-span-8">
+          <OperationalChain />
         </div>
       </div>
     </>

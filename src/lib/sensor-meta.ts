@@ -7,7 +7,20 @@ export const SENSOR_META: Record<SensorType, { label: string; hazard: string; un
   humidity: { label: "الرطوبة", hazard: "ارتفاع الرطوبة", unitLabel: "%", decimals: 0 },
   pressure: { label: "الضغط الجوي", hazard: "انخفاض الضغط الجوي", unitLabel: "hPa", decimals: 0 },
   vibration: { label: "الاهتزاز", hazard: "اهتزاز غير طبيعي", unitLabel: "g", decimals: 2 },
+  rainfall: { label: "هطول الأمطار", hazard: "هطول أمطار", unitLabel: "مم/د", decimals: 1 },
 };
+
+export const SENSOR_META_EN: Record<SensorType, { label: string; hazard: string; unitLabel: string }> = {
+  water_level: { label: "Water level", hazard: "Rising water level", unitLabel: "cm" },
+  smoke_gas: { label: "Smoke / gas", hazard: "Rising smoke index", unitLabel: "raw" },
+  temperature: { label: "Temperature", hazard: "High temperature", unitLabel: "°C" },
+  humidity: { label: "Humidity", hazard: "High humidity", unitLabel: "%" },
+  pressure: { label: "Air pressure", hazard: "Falling air pressure", unitLabel: "hPa" },
+  vibration: { label: "Vibration", hazard: "Abnormal vibration", unitLabel: "g" },
+  rainfall: { label: "Rainfall", hazard: "Rainfall", unitLabel: "mm/min" },
+};
+
+export const STATUS_LABEL_EN: Record<Status, string> = { normal: "Normal", warning: "Warning", danger: "Critical", unknown: "Unclassified" };
 
 export const STATUS_LABEL: Record<Status, string> = {
   normal: "طبيعي",

@@ -47,6 +47,14 @@ export async function subscribe(listener: Listener): Promise<() => void> {
   return () => hub.listeners.delete(listener);
 }
 
+/**
+ * In-process fan-out for large payloads (run state, event batches) that exceed pg_notify's 8 kB limit.
+ * Valid because RASD runs as a single Node process (see docs/architecture.md).
+ */
+export function emitLocal(event: RealtimeEvent) {
+  for (const l of hub.listeners) l(event);
+}
+
 export async function publish(event: RealtimeEvent): Promise<void> {
   await pool.query("SELECT pg_notify($1, $2)", [CHANNEL, JSON.stringify(event)]);
 }

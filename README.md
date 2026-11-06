@@ -8,6 +8,20 @@ Real-time monitoring prototype: **sensor → ingest → classify (طبيعي / �
 - Editable per-sensor-type thresholds, alert log with acknowledgement, and a response path (رصد ← تحليل ← تنبيه ← تأكيد الاطلاع).
 - A built-in **simulator** keeps the demo alive (random walk with occasional hazard surges). A sensor switches to live automatically when a real device reports for it.
 
+## Disaster-response workflow (RASD-DEV-001 + Flood Scenario F-03)
+
+**replay → validation → L0 alert → L1 rule-based risk → virtual areas → ranking → recommendations → versioned response plan → virtual routes**, with What-if projection. Everything is traceable and labelled **SIMULATED SCENARIO – NOT LIVE DATA**.
+
+- **One pure, deterministic engine** (`src/engine`) is shared by the server runner, What-if, the in-app Verification Center and the unit tests. F-03's golden tables (all 32 ticks, exact explanations) are checked against production code.
+- **Evidence Chain**: click any area, rank, recommendation, plan action or chain node to trace it back to reading ids, rules fired and ruleset versions.
+- **Verification Center** (`/verification`): runs F-03 TC-01…17 and AT-01…25 in-app. Offline tests are recorded manually and never auto-claimed.
+- **Plan versions with diffs** (`/plans`), an audit **event log** (`/events`), a computed **system status and audit** page (`/system`), and a watermarked evidence export per run.
+- **Honest labelling**: data sources are real / simulated / test / external. AI is *Not Configured*. Virtual geography is marked as virtual. Recommendations are never field orders.
+- Arabic by default, with an **EN** toggle.
+
+Pages: `/simulation` (Simulation Center), `/plans`, `/events`, `/verification`, `/system`, plus the existing dashboard, `/alerts`, `/stations` and `/thresholds`.
+Docs: [`docs/`](docs/), covering the technical audit, feature inventory, architecture, data model, API, rules, test results, known issues, decision log, deploy and demo script.
+
 ## Quick start
 
 ```bash
@@ -15,7 +29,7 @@ pnpm install
 cp .env.example .env.local        # set DATABASE_URL etc.
 pnpm db:setup                     # schema + 12 demo stations + 1h of history (add -- --reset to reseed)
 pnpm dev                          # http://localhost:3000  (login with ADMIN_USER / ADMIN_PASSWORD)
-pnpm test                         # severity / escalation unit tests
+pnpm test                         # engine golden tests (F-03) + severity tests
 ```
 
 ## Sending readings (ESP32 or anything else)

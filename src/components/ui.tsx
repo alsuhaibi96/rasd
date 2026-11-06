@@ -1,8 +1,10 @@
+"use client";
 import clsx from "clsx";
-import { Activity, Droplet, Droplets, Flame, Gauge, Thermometer, type LucideIcon } from "lucide-react";
+import { Activity, CloudRain, Droplet, Droplets, Flame, Gauge, Thermometer, type LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { SENSOR_META, STATUS_LABEL } from "@/lib/sensor-meta";
-import type { SensorType, Source, Status } from "@/lib/types";
+import { useTr } from "@/lib/i18n";
+import { SENSOR_META, STATUS_LABEL, STATUS_LABEL_EN } from "@/lib/sensor-meta";
+import type { DataSource, SensorType, Source, Status } from "@/lib/types";
 
 export const SENSOR_ICON: Record<SensorType, LucideIcon> = {
   water_level: Droplet,
@@ -11,6 +13,7 @@ export const SENSOR_ICON: Record<SensorType, LucideIcon> = {
   humidity: Droplets,
   pressure: Gauge,
   vibration: Activity,
+  rainfall: CloudRain,
 };
 
 const TONE: Record<Status, string> = {
@@ -38,17 +41,105 @@ export function StatusBadge({ status, className }: { status: Status; className?:
   return (
     <span className={clsx("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium", TONE[status], className)}>
       <StatusDot status={status} pulse={status === "danger"} />
-      {STATUS_LABEL[status]}
+      <StatusText status={status} />
     </span>
   );
 }
 
-export function SourceTag({ source }: { source: Source }) {
-  return source === "device" ? (
-    <span className="rounded border border-brand/40 bg-brand/10 px-1.5 py-px text-[10px] font-medium text-brand">جهاز</span>
-  ) : (
-    <span className="rounded border border-line-2 bg-surface-3 px-1.5 py-px text-[10px] text-muted">تجريبي</span>
+function StatusText({ status }: { status: Status }) {
+  const tr = useTr();
+  return <>{tr(STATUS_LABEL[status], STATUS_LABEL_EN[status])}</>;
+}
+
+/** Spec §4.3 classification. Accepts the legacy device/simulator source too. */
+export function SourceTag({ source }: { source: Source | DataSource }) {
+  const tr = useTr();
+  const ds: DataSource = source === "device" ? "external" : source === "simulator" ? "simulated" : source;
+  const label = { real: tr("حقيقي", "Real"), simulated: tr("محاكاة", "Simulated"), test: tr("اختبار", "Test"), external: tr("خارجي · غير متحقق", "External · unverified") }[ds];
+  const tone = {
+    real: "border-brand/40 bg-brand/10 text-brand",
+    simulated: "border-[#c2410c]/50 bg-[#7c2d12]/30 text-[#fdba74]",
+    test: "border-line-2 bg-surface-3 text-muted",
+    external: "border-sky-400/40 bg-sky-400/10 text-sky-300",
+  }[ds];
+  return <span className={clsx("rounded border px-1.5 py-px text-[10px] font-medium", tone)}>{label}</span>;
+}
+
+/* ---------- L1 risk (separate vocabulary and visual from L0 alert status) ---------- */
+export type RiskKey = "low" | "moderate" | "elevated" | "severe" | "no_data" | "unaffected" | null;
+export const RISK_COLOR: Record<string, string> = {
+  low: "#34d399",
+  moderate: "#fbbf24",
+  elevated: "#fb923c", // intermediate amber
+  severe: "#f43f5e",
+  no_data: "#5d7571",
+  unaffected: "#24393f",
+};
+const RISK_STEPS = ["low", "moderate", "elevated", "severe"] as const;
+export function riskLabel(r: RiskKey, tr: (a: string, e: string) => string) {
+  if (r == null) return tr("غير متاح", "Unavailable");
+  return {
+    low: tr("منخفض", "Low"),
+    moderate: tr("متوسط", "Moderate"),
+    elevated: tr("مرتفع", "Elevated"),
+    severe: tr("شديد", "Severe"),
+    no_data: tr("لا توجد بيانات", "No Data"),
+    unaffected: tr("غير متأثرة", "Unaffected"),
+  }[r];
+}
+
+/** 4-step level indicator (F-03 §0: risk uses a stepped bar, alert status uses a pill). */
+export function RiskLevel({ risk, size = "md", note }: { risk: RiskKey; size?: "sm" | "md" | "lg"; note?: string }) {
+  const tr = useTr();
+  const idx = risk ? RISK_STEPS.indexOf(risk as (typeof RISK_STEPS)[number]) : -1;
+  const h = { sm: "h-1.5 w-4", md: "h-2 w-6", lg: "h-2.5 w-9" }[size];
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="inline-flex gap-0.5" dir="ltr" aria-hidden>
+        {RISK_STEPS.map((s, i) => (
+          <span key={s} className={clsx("rounded-sm", h)} style={{ background: i <= idx ? RISK_COLOR[risk!] : "var(--color-surface-3)" }} />
+        ))}
+      </span>
+      <span className={clsx("font-semibold", size === "lg" ? "text-xl" : size === "sm" ? "text-xs" : "text-sm")} style={{ color: idx >= 0 ? RISK_COLOR[risk!] : "var(--color-muted)" }}>
+        {riskLabel(risk, tr)}
+      </span>
+      {note && <span className="text-[11px] text-muted">({note})</span>}
+    </span>
   );
+}
+
+export function RiskChip({ risk, className }: { risk: RiskKey; className?: string }) {
+  const tr = useTr();
+  const c = risk ? RISK_COLOR[risk] : RISK_COLOR.no_data;
+  const dashed = risk === "no_data" || risk == null;
+  return (
+    <span
+      className={clsx("inline-flex items-center gap-1 rounded px-1.5 py-px text-[11px] font-semibold", dashed && "border border-dashed", className)}
+      style={{ color: risk === "unaffected" ? "var(--color-dim)" : c, background: dashed || risk === "unaffected" ? "transparent" : c + "1f", borderColor: dashed ? c : undefined }}
+    >
+      {riskLabel(risk, tr)}
+    </span>
+  );
+}
+
+export function Pill({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={clsx("inline-flex items-center gap-1 rounded-md border border-line-2 bg-surface-2 px-2 py-0.5 text-[11px] text-muted", className)}>{children}</span>;
+}
+
+/** Module/runtime state used across the chain and system pages (spec §15.2). */
+export type ModuleState = "operational" | "simulated" | "proposed" | "unavailable" | "not_configured" | "idle" | "error";
+export function StateTag({ state }: { state: ModuleState }) {
+  const tr = useTr();
+  const m = {
+    operational: [tr("يعمل", "Operational"), "border-ok/30 bg-ok/10 text-ok"],
+    simulated: [tr("محاكاة", "Simulated"), "border-[#c2410c]/50 bg-[#7c2d12]/30 text-[#fdba74]"],
+    proposed: [tr("مقترح", "Proposed"), "border-line-2 bg-surface-3 text-muted"],
+    unavailable: [tr("غير متاح", "Unavailable"), "border-line-2 bg-transparent text-dim"],
+    not_configured: [tr("غير مُهيأ", "Not Configured"), "border-line-2 bg-transparent text-dim"],
+    idle: [tr("بانتظار بيانات", "Idle"), "border-line-2 bg-surface-2 text-muted"],
+    error: [tr("خطأ", "Error"), "border-danger/40 bg-danger/10 text-danger"],
+  }[state];
+  return <span className={clsx("rounded border px-1.5 py-px text-[10px] font-semibold", m[1])}>{m[0]}</span>;
 }
 
 export function SensorIcon({ type, status = "unknown", size = "md" }: { type: SensorType; status?: Status; size?: "sm" | "md" | "lg" }) {
