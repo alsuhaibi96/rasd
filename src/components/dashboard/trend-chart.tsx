@@ -2,13 +2,16 @@
 import { useEffect, useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmtShortTime, fmtTime } from "@/lib/format";
-import { SENSOR_META, STATUS_COLOR, formatValue } from "@/lib/sensor-meta";
+import { useLang } from "@/lib/i18n";
+import { SENSOR_META, SENSOR_META_EN, STATUS_COLOR, formatValue } from "@/lib/sensor-meta";
 import { useRasd } from "@/lib/store";
 import type { Sensor } from "@/lib/types";
 
 export function TrendChart({ sensor, height = 220 }: { sensor: Sensor; height?: number }) {
   const history = useRasd((s) => s.history[sensor.id]);
   const loadHistory = useRasd((s) => s.loadHistory);
+  const lang = useLang();
+  const en = lang === "en";
   const threshold = useRasd((s) => s.thresholds.find((t) => t.sensor_type === sensor.type));
 
   useEffect(() => {
@@ -16,7 +19,7 @@ export function TrendChart({ sensor, height = 220 }: { sensor: Sensor; height?: 
   }, [sensor.id, history, loadHistory]);
 
   const data = useMemo(() => (history ?? []).map((r) => ({ t: Date.parse(r.created_at), v: r.value })), [history]);
-  const meta = SENSOR_META[sensor.type];
+  const meta = en ? { ...SENSOR_META[sensor.type], ...SENSOR_META_EN[sensor.type] } : SENSOR_META[sensor.type];
   const color = STATUS_COLOR[sensor.last_status === "unknown" ? "normal" : sensor.last_status];
 
   const domain = useMemo(() => {
@@ -46,14 +49,14 @@ export function TrendChart({ sensor, height = 220 }: { sensor: Sensor; height?: 
           <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={fmtShortTime} stroke="#5d7571" fontSize={11} tickLine={false} axisLine={false} minTickGap={40} />
           <YAxis domain={domain} stroke="#5d7571" fontSize={11} tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => formatValue(sensor.type, v)} />
           {threshold?.warning != null && (
-            <ReferenceLine y={threshold.warning} stroke="#fbbf24" strokeDasharray="5 4" strokeOpacity={0.8} label={{ value: "تحذير", fill: "#fbbf24", fontSize: 10, position: "insideTopLeft" }} />
+            <ReferenceLine y={threshold.warning} stroke="#fbbf24" strokeDasharray="5 4" strokeOpacity={0.8} label={{ value: en ? "Warning" : "تحذير", fill: "#fbbf24", fontSize: 10, position: "insideTopLeft" }} />
           )}
           {threshold?.danger != null && (
-            <ReferenceLine y={threshold.danger} stroke="#f43f5e" strokeDasharray="5 4" strokeOpacity={0.9} label={{ value: "خطر", fill: "#f43f5e", fontSize: 10, position: "insideTopLeft" }} />
+            <ReferenceLine y={threshold.danger} stroke="#f43f5e" strokeDasharray="5 4" strokeOpacity={0.9} label={{ value: en ? "Critical" : "خطر", fill: "#f43f5e", fontSize: 10, position: "insideTopLeft" }} />
           )}
           <Tooltip
             cursor={{ stroke: "#24393f" }}
-            contentStyle={{ background: "#0f1e23", border: "1px solid #24393f", borderRadius: 10, fontSize: 12, direction: "rtl" }}
+            contentStyle={{ background: "#0f1e23", border: "1px solid #24393f", borderRadius: 10, fontSize: 12, direction: en ? "ltr" : "rtl" }}
             labelFormatter={(t) => fmtTime(new Date(Number(t)).toISOString())}
             formatter={(v) => [`${formatValue(sensor.type, Number(v))} ${meta.unitLabel}`, meta.label]}
           />

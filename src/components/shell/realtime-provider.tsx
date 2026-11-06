@@ -2,7 +2,8 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { indexBy } from "@/lib/derive";
-import { SENSOR_META, formatValue } from "@/lib/sensor-meta";
+import type { Lang } from "@/lib/i18n";
+import { SENSOR_META, SENSOR_META_EN, formatValue } from "@/lib/sensor-meta";
 import { useRasd } from "@/lib/store";
 import type { RealtimeEvent, Snapshot } from "@/lib/types";
 
@@ -23,12 +24,18 @@ function beep(level: "warning" | "danger") {
 }
 
 /** Hydrates the store from the server snapshot and keeps it live over SSE. */
-export function RealtimeProvider({ snapshot, user, children }: { snapshot: Snapshot; user: string; children: React.ReactNode }) {
+export function RealtimeProvider({ snapshot, user, lang, children }: { snapshot: Snapshot; user: string; lang: Lang; children: React.ReactNode }) {
   const hydrated = useRef(false);
   if (!hydrated.current) {
-    useRasd.getState().hydrate(snapshot, user);
+    useRasd.getState().hydrate(snapshot, user, lang);
     hydrated.current = true;
   }
+
+  // Event feed of the active run (the stream only carries new events).
+  const runId = useRasd((s) => s.run?.run_id);
+  useEffect(() => {
+    if (runId) useRasd.getState().loadEvents(runId);
+  }, [runId]);
 
   useEffect(() => {
     let es: EventSource | null = null;
@@ -43,7 +50,11 @@ export function RealtimeProvider({ snapshot, user, children }: { snapshot: Snaps
         // After a reconnect, resync anything missed while offline.
         if (everConnected) {
           const res = await fetch("/api/snapshot");
-          if (res.ok) hydrate(await res.json(), useRasd.getState().user);
+          if (res.ok) {
+            const snap = await res.json();
+            hydrate(snap, useRasd.getState().user);
+            if (snap.run) useRasd.getState().loadEvents(snap.run.run_id);
+          }
         }
         everConnected = true;
       };
@@ -55,12 +66,12 @@ export function RealtimeProvider({ snapshot, user, children }: { snapshot: Snaps
           const s = indexBy(sensors).get(e.alert.sensor_id);
           const st = s && indexBy(stations).get(s.station_id);
           if (!s || !st) return;
-          const meta = SENSOR_META[s.type];
-          const text = `${st.name_ar}، ${st.city_ar} · ${formatValue(s.type, e.alert.value)} ${meta.unitLabel}`;
-          (e.alert.level === "danger" ? toast.error : toast.warning)(
-            `${e.alert.level === "danger" ? "خطر" : "تحذير"}: ${meta.hazard}`,
-            { description: text },
-          );
+          const en = useRasd.getState().lang === "en";
+          const meta = en ? SENSOR_META_EN[s.type] : SENSOR_META[s.type];
+          const sim = e.alert.data_source !== "real" ? (en ? " · SIMULATED" : " · محاكاة") : "";
+          const text = `${en ? st.code : `${st.name_ar}، ${st.city_ar}`} · ${formatValue(s.type, e.alert.value)} ${meta.unitLabel}${sim}`;
+          const level = e.alert.level === "danger" ? (en ? "Critical (L0)" : "خطر (L0)") : en ? "Warning (L0)" : "تحذير (L0)";
+          (e.alert.level === "danger" ? toast.error : toast.warning)(`${level}: ${meta.hazard}`, { description: text });
           beep(e.alert.level);
         }
       };

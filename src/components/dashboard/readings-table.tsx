@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { bySeverity, indexBy } from "@/lib/derive";
 import { fmtTime, isStale, timeAgo } from "@/lib/format";
-import { SENSOR_META, formatValue } from "@/lib/sensor-meta";
+import { useLang, useTr } from "@/lib/i18n";
+import { SENSOR_META, SENSOR_META_EN, formatValue } from "@/lib/sensor-meta";
 import { useRasd } from "@/lib/store";
 import { useNow } from "@/lib/use-now";
 import { Card, SectionTitle, SensorIcon, SourceTag, StatusBadge, Value } from "../ui";
@@ -18,6 +19,8 @@ export function ReadingsTable({ limit }: { limit?: number }) {
   const selected = useRasd((s) => s.selectedSensorId);
   const select = useRasd((s) => s.select);
   const now = useNow(Date.parse(useRasd.getState().serverTime));
+  const tr = useTr();
+  const lang = useLang();
   const stationById = indexBy(stations);
   const rows = [...sensors].sort(bySeverity).slice(0, limit);
 
@@ -26,12 +29,12 @@ export function ReadingsTable({ limit }: { limit?: number }) {
       <div className="p-5 pb-4">
         <SectionTitle
           icon={Radio}
-          title="قراءات الحساسات"
-          sub={`${sensors.length} حساس · مرتبة حسب الخطورة`}
+          title={tr("قراءات الحساسات", "Sensor readings")}
+          sub={tr(`${sensors.length} حساس · مرتبة حسب الخطورة`, `${sensors.length} sensors · sorted by severity`)}
           action={
             limit ? (
               <Link href="/stations" className="flex items-center gap-1 text-sm text-brand hover:underline">
-                عرض الكل <ArrowLeft className="size-4" />
+                {tr("عرض الكل", "View all")} <ArrowLeft className="size-4 ltr:rotate-180" />
               </Link>
             ) : null
           }
@@ -41,17 +44,18 @@ export function ReadingsTable({ limit }: { limit?: number }) {
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-y border-line bg-surface-2/50 text-xs text-muted">
-              <th className="px-5 py-3 text-start font-medium">الحساس / المصدر</th>
-              <th className="px-3 py-3 text-start font-medium">نقطة الرصد</th>
-              <th className="px-3 py-3 text-start font-medium">القراءة</th>
-              <th className="px-3 py-3 text-start font-medium">الحالة</th>
-              <th className="px-5 py-3 text-start font-medium">آخر تحديث</th>
+              <th className="px-5 py-3 text-start font-medium">{tr("الحساس / المصدر", "Sensor / source")}</th>
+              <th className="px-3 py-3 text-start font-medium">{tr("نقطة الرصد", "Monitoring point")}</th>
+              <th className="px-3 py-3 text-start font-medium">{tr("القراءة", "Reading")}</th>
+              <th className="px-3 py-3 text-start font-medium">{tr("الحالة", "Status")}</th>
+              <th className="px-5 py-3 text-start font-medium">{tr("آخر تحديث", "Last update")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((s) => {
               const st = stationById.get(s.station_id);
-              const meta = SENSOR_META[s.type];
+              const meta = lang === "en" ? { ...SENSOR_META[s.type], ...SENSOR_META_EN[s.type] } : SENSOR_META[s.type];
+              const simulated = s.last_data_source === "simulated" || s.last_data_source === "test";
               const stale = isStale(s.last_seen_at, now);
               return (
                 <tr
@@ -70,6 +74,7 @@ export function ReadingsTable({ limit }: { limit?: number }) {
                         <div className="font-semibold">{meta.label}</div>
                         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
                           <span className="num">{s.code}</span> <SourceTag source={s.last_source} />
+                          {s.last_scenario_id && <span className="num text-muted">{s.last_scenario_id}</span>}
                         </div>
                       </div>
                     </div>
@@ -85,12 +90,14 @@ export function ReadingsTable({ limit }: { limit?: number }) {
                     <StatusBadge status={s.last_status} />
                     <div className="mt-1 flex items-center gap-1 text-[11px] text-dim">
                       <span className={clsx("size-1 rounded-full", stale ? "bg-unk" : "bg-brand")} />
-                      {stale ? "قراءة قديمة" : "قراءة حية"}
+                      {simulated
+                        ? stale ? tr("قراءة محاكاة قديمة", "Stale simulated reading") : tr("قراءة محاكاة", "Simulated reading")
+                        : stale ? tr("قراءة قديمة", "Stale reading") : tr("قراءة حية", "Live reading")}
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-muted">
                     <div className="num">{fmtTime(s.last_seen_at)}</div>
-                    <div className="mt-0.5 text-dim" suppressHydrationWarning>{timeAgo(s.last_seen_at, now)}</div>
+                    <div className="mt-0.5 text-dim" suppressHydrationWarning>{timeAgo(s.last_seen_at, now, lang)}</div>
                   </td>
                 </tr>
               );

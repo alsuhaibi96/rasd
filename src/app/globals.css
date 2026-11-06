@@ -99,3 +99,12 @@ body {
   font-family: var(--font-sans);
 }
 .maplibregl-popup.rasd-popup .maplibregl-popup-tip { border-top-color: #0f1e23f2; border-bottom-color: #0f1e23f2; }
+
+/* ---------- Simulation basin map ---------- */
+.sim-area-label { display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 11px; color: #e6f0ee; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+.sim-area-label .rank { background: #e6f0ee; color: #071014; font-weight: 800; border-radius: 6px; padding: 0 5px; font-variant-numeric: tabular-nums; direction: ltr; }
+.sim-area-label .nm { opacity: .9; }
+.sim-sensor { position: relative; width: 18px; height: 18px; display: grid; place-items: center; --c: #8ea4a0; }
+.sim-sensor .dot { width: 12px; height: 12px; border-radius: 3px; background: var(--c); box-shadow: 0 0 10px var(--c); transform: rotate(45deg); }
+.sim-sensor .ring { position: absolute; inset: -6px; border-radius: 999px; border: 2px solid var(--c); animation: pulse-ring 1.6s infinite; }
+.sim-sensor .tag { position: absolute; top: 18px; white-space: nowrap; font-size: 10px; color: #8ea4a0; direction: ltr; }

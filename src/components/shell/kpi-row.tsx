@@ -1,61 +1,79 @@
 "use client";
 import clsx from "clsx";
-import { RefreshCw, Radio, ShieldAlert, TriangleAlert } from "lucide-react";
+import { Archive, RefreshCw, Radio, ShieldAlert, TriangleAlert } from "lucide-react";
 import { kpis } from "@/lib/derive";
 import { fmtTime, timeAgo } from "@/lib/format";
+import { useLang, useTr } from "@/lib/i18n";
 import { useRasd } from "@/lib/store";
 import { useNow } from "@/lib/use-now";
 import { Card } from "../ui";
 
 export function KpiRow() {
-  const sensors = useRasd((s) => s.sensors);
+  const allSensors = useRasd((s) => s.sensors);
   const lastEventAt = useRasd((s) => s.lastEventAt);
+  const run = useRasd((s) => s.run);
+  const alerts = useRasd((s) => s.alerts);
+  const alertTotal = useRasd((s) => s.alertTotal);
   const now = useNow(Date.parse(useRasd.getState().serverTime));
+  const tr = useTr();
+  const lang = useLang();
+  // F-03 §9: during a scenario the active counters show the scenario point only.
+  const sensors = run ? allSensors.filter((s) => s.last_scenario_id === run.scenario_id) : allSensors;
   const k = kpis(sensors, now);
+  const kAll = kpis(allSensors, now);
+  const runAlerts = run ? alerts.filter((a) => a.run_id === run.run_id).length : alertTotal;
 
   const items = [
     {
-      label: "الأجهزة الفعلية المتصلة",
+      label: tr("الأجهزة الفعلية المتصلة", "Real devices connected"),
       icon: Radio,
       tone: "text-brand bg-brand/10 border-brand/25",
       value: (
         <>
-          {k.deviceOnline}
-          <span className="ms-1 text-base font-medium text-dim">/ {k.total}</span>
+          {kAll.deviceOnline}
+          <span className="ms-1 text-base font-medium text-dim">/ {kAll.total}</span>
         </>
       ),
-      foot: k.deviceOnline ? "أجهزة ESP32 ترسل قراءات حية" : "بانتظار ربط أول جهاز",
-      footTone: k.deviceOnline ? "text-brand" : "text-muted",
+      foot: kAll.deviceOnline ? tr("أجهزة ترسل قراءات (مصدر خارجي غير متحقق منه)", "Devices reporting (external, unverified source)") : tr("لا توجد أجهزة حقيقية متصلة", "No real devices connected"),
+      footTone: kAll.deviceOnline ? "text-brand" : "text-muted",
     },
     {
-      label: "حالات الخطر",
+      label: tr("خطر نشط (L0)", "Active Critical (L0)"),
       icon: TriangleAlert,
       tone: "text-danger bg-danger/10 border-danger/30",
       value: k.danger,
-      foot: "حساسات تجاوزت حد الخطر الآن",
+      foot: run ? tr("نقطة السيناريو فقط · الحالة الحالية", "Scenario point only · current status") : tr("حساسات عند حد الخطر الآن", "Sensors at Critical now"),
       footTone: k.danger ? "text-[#ff8a9c]" : "text-muted",
     },
     {
-      label: "حالات التحذير",
+      label: tr("تحذير نشط (L0)", "Active Warning (L0)"),
       icon: ShieldAlert,
       tone: "text-warn bg-warn/10 border-warn/30",
       value: k.warning,
-      foot: "قراءات تجاوزت حد التحذير",
+      foot: run ? tr("نقطة السيناريو فقط · الحالة الحالية", "Scenario point only · current status") : tr("حساسات عند حد التحذير الآن", "Sensors at Warning now"),
       footTone: k.warning ? "text-warn" : "text-muted",
     },
     {
-      label: "آخر قراءة مستلمة",
+      label: tr("سجل التنبيهات (تراكمي)", "Alert log (cumulative)"),
+      icon: Archive,
+      tone: "text-muted bg-surface-3 border-line-2",
+      value: runAlerts,
+      foot: run ? tr(`سجلات L0 لهذا التشغيل · لا تُحذف عند العودة للطبيعي`, `L0 records for this run · kept after return to Normal`) : tr("كل السجلات المحفوظة · لا تُحذف", "All saved records · never deleted"),
+      footTone: "text-muted",
+    },
+    {
+      label: run ? tr("آخر قراءة محاكاة", "Last simulated reading") : tr("آخر قراءة مستلمة", "Last reading received"),
       icon: RefreshCw,
       tone: "text-muted bg-surface-3 border-line-2",
-      value: <span suppressHydrationWarning>{timeAgo(k.lastSeen, now)}</span>,
-      foot: <>التحديث تلقائي · <span className="num">{fmtTime(k.lastSeen)}</span></>,
+      value: <span suppressHydrationWarning>{timeAgo(k.lastSeen, now, lang)}</span>,
+      foot: <>{tr("التحديث تلقائي", "Auto-updating")} · <span className="num">{fmtTime(k.lastSeen)}</span></>,
       footTone: "text-muted",
       spin: true,
     },
   ];
 
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5">
       {items.map((it) => (
         <Card key={it.label} className="relative overflow-hidden p-4 sm:p-5">
           <div className="flex items-start justify-between gap-2">

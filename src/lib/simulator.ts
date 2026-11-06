@@ -18,6 +18,7 @@ export const PROFILES: Record<SensorType, Profile> = {
   humidity: { base: 42, noise: 1.2, surge: [82, 96], min: 0, max: 100 },
   pressure: { base: 1011, noise: 0.5, surge: [984, 999], min: 950, max: 1050 },
   vibration: { base: 0.03, noise: 0.01, surge: [0.32, 0.85], min: 0, max: 2 },
+  rainfall: { base: 0, noise: 0.02, surge: [0.4, 1.2], min: 0, max: 50 },
 };
 
 const SURGE_CHANCE = 0.004;
@@ -62,9 +63,20 @@ function isSimulated(s: Sensor) {
   return !(s.last_source === "device" && s.last_seen_at && Date.now() - Date.parse(s.last_seen_at) < DEVICE_GRACE_MS);
 }
 
+/** Replay isolation (F-03 §2): the background generator pauses while a scenario run is active. */
+const gate = globalThis as unknown as { __rasdGeneratorPaused?: boolean };
+export function setGeneratorPaused(paused: boolean) {
+  gate.__rasdGeneratorPaused = paused;
+}
+export function generatorPaused() {
+  return !!gate.__rasdGeneratorPaused;
+}
+
 export async function simulateTick() {
+  if (generatorPaused()) return;
   const { rows } = await pool.query<Sensor>("SELECT * FROM sensors ORDER BY id");
   for (const s of rows.filter(isSimulated)) {
+    if (generatorPaused()) return;
     const decimals = s.type === "vibration" ? 3 : 1;
     await ingestReading(s.code, Number(nextValue(s).toFixed(decimals)), "simulator");
   }

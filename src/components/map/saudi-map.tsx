@@ -5,7 +5,8 @@ import type { ExpressionSpecification, MapLayerMouseEvent, StyleSpecification } 
 import { LocateFixed, Minus, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { regionStatuses, stationStatus } from "@/lib/derive";
-import { SENSOR_META, STATUS_COLOR, STATUS_LABEL, formatValue } from "@/lib/sensor-meta";
+import { useLang, type Lang } from "@/lib/i18n";
+import { SENSOR_META, SENSOR_META_EN, STATUS_COLOR, STATUS_LABEL, STATUS_LABEL_EN, formatValue } from "@/lib/sensor-meta";
 import type { Sensor, Station, Status } from "@/lib/types";
 
 maplibregl.setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
@@ -28,21 +29,36 @@ const REGION_LABELS: [string, string, [number, number], boolean?][] = [
   ["SA-12", "الجوف", [38.8, 29.3]],
   ["SA-14", "عسير", [44.3, 19.9]],
 ];
-const GEO_LABELS: [string, [number, number], "sea" | "country" | "neighbor"][] = [
-  ["العراق", [43.6, 32.6], "neighbor"],
-  ["الأردن", [36.9, 31.0], "neighbor"],
-  ["الكويت", [47.5, 29.35], "neighbor"],
-  ["قطر", [51.2, 25.3], "neighbor"],
-  ["الإمارات", [54.4, 23.5], "neighbor"],
-  ["عُمان", [56.9, 20.6], "neighbor"],
-  ["اليمن", [47.0, 15.4], "neighbor"],
-  ["مصر", [31.8, 26.0], "neighbor"],
-  ["السودان", [33.3, 18.6], "neighbor"],
-  ["إيران", [53.0, 30.8], "neighbor"],
-  ["البحر الأحمر", [37.3, 22.4], "sea"],
-  ["الخليج العربي", [51.9, 27.2], "sea"],
-  ["بحر العرب", [59.5, 16.5], "sea"],
-  ["المملكة العربية السعودية", [42.9, 23.4], "country"],
+const REGION_EN: Record<string, string> = {
+  "SA-01": "Riyadh",
+  "SA-02": "Makkah",
+  "SA-03": "Madinah",
+  "SA-04": "Eastern Province",
+  "SA-05": "Qassim",
+  "SA-06": "Ha'il",
+  "SA-07": "Tabuk",
+  "SA-08": "Northern Borders",
+  "SA-09": "Jazan",
+  "SA-10": "Najran",
+  "SA-11": "Al Bahah",
+  "SA-12": "Al Jawf",
+  "SA-14": "Asir",
+};
+const GEO_LABELS: [string, string, [number, number], "sea" | "country" | "neighbor"][] = [
+  ["العراق", "Iraq", [43.6, 32.6], "neighbor"],
+  ["الأردن", "Jordan", [36.9, 31.0], "neighbor"],
+  ["الكويت", "Kuwait", [47.5, 29.35], "neighbor"],
+  ["قطر", "Qatar", [51.2, 25.3], "neighbor"],
+  ["الإمارات", "UAE", [54.4, 23.5], "neighbor"],
+  ["عُمان", "Oman", [56.9, 20.6], "neighbor"],
+  ["اليمن", "Yemen", [47.0, 15.4], "neighbor"],
+  ["مصر", "Egypt", [31.8, 26.0], "neighbor"],
+  ["السودان", "Sudan", [33.3, 18.6], "neighbor"],
+  ["إيران", "Iran", [53.0, 30.8], "neighbor"],
+  ["البحر الأحمر", "Red Sea", [37.3, 22.4], "sea"],
+  ["الخليج العربي", "Arabian Gulf", [51.9, 27.2], "sea"],
+  ["بحر العرب", "Arabian Sea", [59.5, 16.5], "sea"],
+  ["المملكة العربية السعودية", "Saudi Arabia", [42.9, 23.4], "country"],
 ];
 
 const statusFill = (alpha: Record<Status, number>, hoverBoost: number): ExpressionSpecification => [
@@ -93,17 +109,19 @@ function el(className: string, text?: string) {
   return d;
 }
 
-function popupHtml(st: Station, sensors: Sensor[]) {
+function popupHtml(st: Station, sensors: Sensor[], lang: Lang) {
+  const en = lang === "en";
+  const statusLabel = en ? STATUS_LABEL_EN : STATUS_LABEL;
   const rows = sensors
     .map((s) => {
-      const m = SENSOR_META[s.type];
+      const m = en ? SENSOR_META_EN[s.type] : SENSOR_META[s.type];
       return `<div style="display:flex;align-items:center;gap:8px;justify-content:space-between;margin-top:6px;font-size:12px">
         <span style="color:#8ea4a0">${m.label}</span>
         <span style="display:inline-flex;align-items:center;gap:6px"><b class="num">${formatValue(s.type, s.last_value)}</b><span style="color:#8ea4a0">${m.unitLabel}</span>
-        <span style="color:${STATUS_COLOR[s.last_status]};font-size:11px">● ${STATUS_LABEL[s.last_status]}</span></span></div>`;
+        <span style="color:${STATUS_COLOR[s.last_status]};font-size:11px">● ${statusLabel[s.last_status]}</span></span></div>`;
     })
     .join("");
-  return `<div style="min-width:190px"><div style="font-weight:700;font-size:13px">${st.name_ar}، ${st.city_ar}</div>
+  return `<div style="min-width:190px"><div style="font-weight:700;font-size:13px">${st.name_ar}${en ? ", " : "، "}${st.city_ar}</div>
     <div style="color:#5d7571;font-size:11px">${st.code}</div>${rows}</div>`;
 }
 
@@ -121,6 +139,9 @@ export default function SaudiMap({ stations, sensors, selectedStationId, onSelec
   const markers = useRef(new Map<number, { el: HTMLElement; popup: maplibregl.Popup }>());
   const [ready, setReady] = useState(false);
   const [hoverRegion, setHoverRegion] = useState<string | null>(null);
+  const lang = useLang();
+  const en = lang === "en";
+  const statusLabel = en ? STATUS_LABEL_EN : STATUS_LABEL;
   const onSelect = useRef(onSelectStation);
   onSelect.current = onSelectStation;
 
@@ -149,10 +170,6 @@ export default function SaudiMap({ stations, sensors, selectedStationId, onSelec
     map.on("zoom", setZoomClass);
     setZoomClass();
 
-    for (const [name, lnglat, kind] of GEO_LABELS) {
-      new maplibregl.Marker({ element: el(`rasd-geo-label ${kind}`, name) }).setLngLat(lnglat).addTo(map);
-    }
-
     let hovered: string | null = null;
     map.on("mousemove", "regions-fill", (e: MapLayerMouseEvent) => {
       const id = e.features?.[0]?.id as string | undefined;
@@ -180,6 +197,16 @@ export default function SaudiMap({ stations, sensors, selectedStationId, onSelec
     };
   }, []);
 
+  // Country / sea labels in the current language.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const geo = GEO_LABELS.map(([ar, enName, lnglat, kind]) =>
+      new maplibregl.Marker({ element: el(`rasd-geo-label ${kind}`, lang === "en" ? enName : ar) }).setLngLat(lnglat).addTo(map),
+    );
+    return () => geo.forEach((m) => m.remove());
+  }, [lang]);
+
   // Region labels, skipping any region whose name a station label already shows.
   const regionLabels = useRef<maplibregl.Marker[]>([]);
   useEffect(() => {
@@ -187,10 +214,12 @@ export default function SaudiMap({ stations, sensors, selectedStationId, onSelec
     if (!map) return;
     regionLabels.current.forEach((m) => m.remove());
     const cities = new Set(stations.map((s) => s.city_ar));
-    regionLabels.current = REGION_LABELS.filter(([, name]) => !cities.has(name)).map(([, name, lnglat, minor]) =>
-      new maplibregl.Marker({ element: el(`rasd-region-label${minor ? " minor" : ""}`, name) }).setLngLat(lnglat).addTo(map),
+    regionLabels.current = REGION_LABELS.filter(([, name]) => !cities.has(name)).map(([code, name, lnglat, minor]) =>
+      new maplibregl.Marker({ element: el(`rasd-region-label${minor ? " minor" : ""}`, lang === "en" ? REGION_EN[code] : name) })
+        .setLngLat(lnglat)
+        .addTo(map),
     );
-  }, [stations]);
+  }, [stations, lang]);
 
   // Station markers (created once per station, then updated in place).
   useEffect(() => {
@@ -222,15 +251,19 @@ export default function SaudiMap({ stations, sensors, selectedStationId, onSelec
       const own = sensors.filter((s) => s.station_id === st.id);
       mk.el.dataset.status = stationStatus(st.id, sensors);
       mk.el.dataset.selected = String(st.id === selectedStationId);
-      mk.popup.setHTML(popupHtml(st, own));
+      mk.popup.setHTML(popupHtml(st, own, lang));
     }
     const map = mapRef.current;
     if (!map || !ready) return;
     const rs = regionStatuses(stations, sensors);
     for (const [code] of REGION_LABELS) map.setFeatureState({ source: "regions", id: code }, { status: rs[code] ?? "unknown" });
-  }, [stations, sensors, selectedStationId, ready]);
+  }, [stations, sensors, selectedStationId, ready, lang]);
 
-  const regionName = useMemo(() => REGION_LABELS.find(([c]) => c === hoverRegion)?.[1], [hoverRegion]);
+  const regionName = useMemo(() => {
+    const r = REGION_LABELS.find(([c]) => c === hoverRegion);
+    if (!r) return undefined;
+    return en ? `${REGION_EN[r[0]]} region` : `منطقة ${r[1]}`;
+  }, [hoverRegion, en]);
   const regionStatus = hoverRegion ? regionStatuses(stations, sensors)[hoverRegion] : undefined;
 
   const ctl = "grid size-9 place-items-center text-muted transition hover:bg-surface-3 hover:text-fg";
@@ -240,16 +273,16 @@ export default function SaudiMap({ stations, sensors, selectedStationId, onSelec
       {!ready && <div className="absolute inset-0 animate-pulse bg-[#08161b]" />}
 
       <div className="absolute top-3 left-3 flex flex-col overflow-hidden rounded-xl border border-line-2 bg-surface/90 backdrop-blur">
-        <button className={ctl} onClick={() => mapRef.current?.zoomIn()} aria-label="تكبير"><Plus className="size-4" /></button>
-        <button className={`${ctl} border-y border-line`} onClick={() => mapRef.current?.zoomOut()} aria-label="تصغير"><Minus className="size-4" /></button>
-        <button className={ctl} onClick={() => mapRef.current?.fitBounds(KSA_BOUNDS, { padding: 24 })} aria-label="إعادة الضبط"><LocateFixed className="size-4" /></button>
+        <button className={ctl} onClick={() => mapRef.current?.zoomIn()} aria-label={en ? "Zoom in" : "تكبير"}><Plus className="size-4" /></button>
+        <button className={`${ctl} border-y border-line`} onClick={() => mapRef.current?.zoomOut()} aria-label={en ? "Zoom out" : "تصغير"}><Minus className="size-4" /></button>
+        <button className={ctl} onClick={() => mapRef.current?.fitBounds(KSA_BOUNDS, { padding: 24 })} aria-label={en ? "Reset view" : "إعادة الضبط"}><LocateFixed className="size-4" /></button>
       </div>
 
       {regionName && (
         <div className="pointer-events-none absolute top-3 right-3 rounded-lg border border-line-2 bg-surface/90 px-3 py-1.5 text-xs backdrop-blur">
-          <span className="font-semibold">منطقة {regionName}</span>
+          <span className="font-semibold">{regionName}</span>
           {regionStatus && regionStatus !== "unknown" && (
-            <span className="ms-2" style={{ color: STATUS_COLOR[regionStatus] }}>● {STATUS_LABEL[regionStatus]}</span>
+            <span className="ms-2" style={{ color: STATUS_COLOR[regionStatus] }}>● {statusLabel[regionStatus]}</span>
           )}
         </div>
       )}
@@ -258,7 +291,7 @@ export default function SaudiMap({ stations, sensors, selectedStationId, onSelec
         {(["danger", "warning", "normal", "unknown"] as Status[]).map((s) => (
           <span key={s} className="flex items-center gap-1.5">
             <span className="size-2 rounded-full" style={{ background: STATUS_COLOR[s] }} />
-            {STATUS_LABEL[s]}
+            {statusLabel[s]}
           </span>
         ))}
       </div>

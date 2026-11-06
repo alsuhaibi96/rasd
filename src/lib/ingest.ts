@@ -22,6 +22,8 @@ export interface IngestResult {
  */
 export async function ingestReading(sensorCode: string, value: number, source: Source): Promise<IngestResult> {
   if (!Number.isFinite(value)) throw new IngestError("قيمة القراءة غير صالحة");
+  // Spec §4.3: hardware readings stay External until the device source is verified.
+  const dataSource = source === "device" ? "external" : "simulated";
   const db = await pool.connect();
   let result: IngestResult;
   try {
@@ -42,15 +44,16 @@ export async function ingestReading(sensorCode: string, value: number, source: S
 
     const reading: Reading = (
       await db.query(
-        "INSERT INTO readings (sensor_id, value, status, source) VALUES ($1, $2, $3, $4) RETURNING *",
-        [row.id, value, status, source],
+        "INSERT INTO readings (sensor_id, value, status, source, data_source) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        [row.id, value, status, source, dataSource],
       )
     ).rows[0];
     const sensor: Sensor = (
       await db.query(
-        `UPDATE sensors SET last_value = $2, last_status = $3, last_source = $4, last_seen_at = $5
+        `UPDATE sensors SET last_value = $2, last_status = $3, last_source = $4, last_seen_at = $5,
+                last_data_source = $6, last_scenario_id = NULL
           WHERE id = $1 RETURNING ${SENSOR_COLS}`,
-        [row.id, value, status, source, reading.created_at],
+        [row.id, value, status, source, reading.created_at, dataSource],
       )
     ).rows[0];
 

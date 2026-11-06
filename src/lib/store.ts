@@ -1,17 +1,23 @@
 "use client";
 import { create } from "zustand";
+import type { Lang } from "./i18n";
+import type { LoggedEvent } from "./scenario-types";
 import type { Alert, Reading, RealtimeEvent, Snapshot } from "./types";
 
 const HISTORY_CAP = 240;
+const EVENTS_CAP = 400;
 
 interface State extends Snapshot {
   user: string;
+  lang: Lang;
+  events: LoggedEvent[];
   connected: boolean;
   lastEventAt: number | null;
   history: Record<number, Reading[]>;
   flash: Record<number, number>;
   selectedSensorId: number | null;
-  hydrate: (s: Snapshot, user: string) => void;
+  hydrate: (s: Snapshot, user: string, lang?: Lang) => void;
+  loadEvents: (runId: number) => Promise<void>;
   apply: (e: RealtimeEvent) => void;
   setConnected: (c: boolean) => void;
   select: (sensorId: number | null) => void;
@@ -29,14 +35,25 @@ export const useRasd = create<State>((set, get) => ({
   alerts: [],
   simulator: false,
   serverTime: new Date(0).toISOString(),
+  run: null,
+  alertTotal: 0,
   user: "",
+  lang: "ar",
+  events: [],
   connected: false,
   lastEventAt: null,
   history: {},
   flash: {},
   selectedSensorId: null,
 
-  hydrate: (s, user) => set({ ...s, user }),
+  hydrate: (s, user, lang) => set((st) => ({ ...s, user, lang: lang ?? st.lang, events: s.run && st.events[0]?.run_id === s.run.run_id ? st.events : [] })),
+
+  loadEvents: async (runId) => {
+    const res = await fetch(`/api/events?run=${runId}&limit=${EVENTS_CAP}`);
+    if (!res.ok) return;
+    const rows: LoggedEvent[] = await res.json();
+    set({ events: rows });
+  },
 
   apply: (e) =>
     set((st) => {
@@ -52,10 +69,22 @@ export const useRasd = create<State>((set, get) => ({
           };
         }
         case "alert":
+          return { lastEventAt, alerts: upsertAlert(st.alerts, e.alert), alertTotal: st.alertTotal + (st.alerts.some((x) => x.id === e.alert.id) ? 0 : 1) };
         case "ack":
           return { lastEventAt, alerts: upsertAlert(st.alerts, e.alert) };
         case "thresholds":
           return { lastEventAt, thresholds: e.thresholds, sensors: e.sensors };
+        case "run": {
+          const sameRun = e.run && st.run && e.run.run_id === st.run.run_id;
+          return { run: e.run, events: sameRun ? st.events : [] };
+        }
+        case "events": {
+          const runId = e.events[0]?.run_id;
+          const base = st.events.length && st.events[0].run_id !== runId ? [] : st.events;
+          return { events: [...base, ...e.events].slice(-EVENTS_CAP) };
+        }
+        default:
+          return {};
       }
     }),
 
